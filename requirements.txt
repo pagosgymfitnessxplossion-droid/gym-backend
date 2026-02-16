@@ -1,3 +1,4 @@
-fastapiuvicorn
+fastapi
+uvicorn
 pydantic
 supabase
