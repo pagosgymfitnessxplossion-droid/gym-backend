@@ -28,7 +28,7 @@ return limpio
 
 @app.post("/webhook")
 async def receive_webhook(request: Request):
-# 1. Leemos el mensaje en crudo (A prueba de errores)
+# 1. Leemos el mensaje en crudo
 body_bytes = await request.body()
 raw_body = body_bytes.decode('utf-8', errors='ignore')
 
@@ -42,12 +42,12 @@ if isinstance(data, dict):
 message_text = data.get("message", raw_body)
 sender = data.get("sender", "App_BDV")
 except:
-pass # Si falla el JSON, no importa, usamos el texto crudo
+pass
 
 if len(message_text) < 5:
 return {"status": "ignorado", "reason": "vacio"}
 
-# 3. Limpieza de saltos de línea y mayúsculas
+# 3. Limpieza de saltos de línea
 text = message_text.upper().replace("\n", " ").replace("\r", " ").replace(" ", " ")
 print(f"\n📩 PROCESANDO: {text}")
 
@@ -111,3 +111,4 @@ raise HTTPException(status_code=500, detail=f"Error BD: {str(e)}")
 else:
 print("⚠️ Ignorado: No hay dinero en el texto.")
 return {"status": "ignored", "reason": "sin_dinero"}
+}
