@@ -26,38 +26,35 @@ def limpiar_monto(texto_monto):
 limpio = re.sub(r'[^\d,.]', '', texto_monto).rstrip('.')
 return limpio
 
-# AQUI ESTA LA MAGIA: Usamos Request directo para evitar el Error 422
 @app.post("/webhook")
 async def receive_webhook(request: Request):
-# 1. Leemos el mensaje en crudo, sin importar si está roto
+# 1. Leemos el mensaje en crudo (A prueba de errores)
 body_bytes = await request.body()
 raw_body = body_bytes.decode('utf-8', errors='ignore')
 
 message_text = raw_body
 sender = "App_BDV"
 
-# 2. Intentamos leerlo educadamente como JSON...
+# 2. Intentamos extraer si viene en formato JSON
 try:
 data = json.loads(raw_body)
 if isinstance(data, dict):
 message_text = data.get("message", raw_body)
 sender = data.get("sender", "App_BDV")
 except:
-# 3. SI FALLA (Por culpa de los Enters del banco), NO IMPORTA.
-# Seguimos adelante usando todo el texto crudo recibido.
-pass
+pass # Si falla el JSON, no importa, usamos el texto crudo
 
 if len(message_text) < 5:
 return {"status": "ignorado", "reason": "vacio"}
 
-# Limpiamos el texto: quitamos los Enters problemáticos y lo pasamos a mayúsculas
+# 3. Limpieza de saltos de línea y mayúsculas
 text = message_text.upper().replace("\n", " ").replace("\r", " ").replace(" ", " ")
 print(f"\n📩 PROCESANDO: {text}")
 
 ref = "N/A"
 monto = "0.00"
 
-# ================= EXTRACCIÓN =================
+# ================= EXTRACCIÓN DEL MONTO =================
 posibles_montos_decimales = re.findall(r'\b\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})\b', text)
 if posibles_montos_decimales:
 monto = limpiar_monto(posibles_montos_decimales[0])
@@ -66,6 +63,7 @@ match_entero = re.search(r'(?:BS|USD|VES|\$)\W*(\d+)', text)
 if match_entero:
 monto = match_entero.group(1)
 
+# ================= EXTRACCIÓN DE REFERENCIA =================
 todos_numeros = re.findall(r'\b\d{4,12}\b', text)
 candidatos_ref = []
 monto_limpio_para_comparar = monto.replace('.', '').replace(',', '')
@@ -83,13 +81,13 @@ match_ref_explicita = re.search(r'(?:REF|REFERENCIA|SEC|NRO|DOCUMENTO)\D*(\d{4,1
 if match_ref_explicita:
 ref = match_ref_explicita.group(1)
 
-# Referencia Automática si falta
+# ================= REFERENCIA AUTOMÁTICA =================
 if (ref == "N/A" or ref == "") and monto != "0.00":
 texto_base = text[:40] + str(monto)
 hash_texto = hashlib.md5(texto_base.encode('utf-8')).hexdigest()[:6].upper()
 ref = f"AUTO-{hash_texto}"
 
-# ================= GUARDADO EN BD =================
+# ================= GUARDADO EN BASE DE DATOS =================
 if monto != "0.00":
 try:
 data_to_insert = {
@@ -111,4 +109,5 @@ return {"status": "ignored", "msg": "Referencia duplicada", "ref": ref}
 else:
 raise HTTPException(status_code=500, detail=f"Error BD: {str(e)}")
 else:
+print("⚠️ Ignorado: No hay dinero en el texto.")
 return {"status": "ignored", "reason": "sin_dinero"}
